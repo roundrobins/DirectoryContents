@@ -76,9 +76,6 @@ excluded.files=config.properties,secrets.txt
 # Output format (text)
 output.format=text
 
-# Custom file content processor for specific file types
-processor.java=JavaFileProcessor
-processor.txt=TextFileProcessor
 ```
 
 ## Output Format
@@ -101,8 +98,12 @@ Contributions to improve DirectoryContents are welcome. Please feel free to subm
 
 ## License
 
-[Specify your chosen license here]
+This project is licensed under the MIT License.
 
 ## Disclaimer
 
 This tool may capture sensitive information from your directory. Please review the output file before sharing or using it in any public context.
+
+## Credits
+
+This project was inspired by and adapted from [RepoToTextForLLMs](https://github.com/Doriandarko/RepoToTextForLLMs) by Doriandarko. Their tool for automating the analysis of GitHub repositories for LLMsserved as a valuable transcoding source for this project.
