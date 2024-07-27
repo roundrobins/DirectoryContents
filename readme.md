@@ -106,4 +106,4 @@ This tool may capture sensitive information from your directory. Please review t
 
 ## Credits
 
-This project was inspired by and adapted from [RepoToTextForLLMs](https://github.com/Doriandarko/RepoToTextForLLMs) by Doriandarko. Their tool for automating the analysis of GitHub repositories for LLMsserved as a valuable transcoding source for this project.
+This project was inspired by and adapted from [RepoToTextForLLMs](https://github.com/Doriandarko/RepoToTextForLLMs) by Doriandarko. 
