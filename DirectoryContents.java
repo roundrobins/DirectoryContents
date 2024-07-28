@@ -3,6 +3,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /**
  * This class provides functionality to generate a text representation of a directory's contents,
@@ -10,20 +13,12 @@ import java.util.*;
  * exclude certain directories, file extensions, or specific files.
  */
 public class DirectoryContents {
-    /** The default name of the properties file to be used for configuration. */
+    private static final Logger LOGGER = Logger.getLogger(DirectoryContents.class.getName());
     private static final String DEFAULT_PROPERTIES_FILE = "config.properties";
-    
-    /** The maximum file size (in bytes) that will be included in the output. Default is 1 MB. */
-    private static long MAX_FILE_SIZE = 1024 * 1024; // 1 MB default
-    
-    /** Set of directory names to be excluded from processing. */
-    private static Set<String> EXCLUDED_DIRS = new HashSet<>();
-    
-    /** Set of file extensions to be excluded from processing. */
-    private static Set<String> EXCLUDED_EXTENSIONS = new HashSet<>();
-    
-    /** Set of specific file names to be excluded from processing. */
-    private static Set<String> EXCLUDED_FILES = new HashSet<>();
+    private static long maxFileSize = 1024 * 1024; // 1 MB default
+    private static final Set<String> excludedDirs = new HashSet<>();
+    private static final Set<String> excludedExtensions = new HashSet<>();
+    private static final Set<String> excludedFiles = new HashSet<>();
 
     /**
      * The main entry point of the program.
@@ -38,11 +33,12 @@ public class DirectoryContents {
         // Parse command-line arguments
         if (args.length > 0) {
             targetDirectory = args[0];
-            if (args.length > 1) {                
+            if (args.length > 1) {
                 propertiesFile = args[1];
             }
         }
 
+        
         // Check if the target directory exists and is a directory
         Path targetPath = Paths.get(targetDirectory);
         if (!Files.exists(targetPath) || !Files.isDirectory(targetPath)) {
@@ -78,13 +74,13 @@ public class DirectoryContents {
         if (Files.exists(propPath)) {
             try (InputStream input = Files.newInputStream(propPath)) {
                 props.load(input);
-                MAX_FILE_SIZE = Long.parseLong(props.getProperty("max.file.size", String.valueOf(MAX_FILE_SIZE)).trim());
-                addNonEmptyValues(EXCLUDED_DIRS, props.getProperty("excluded.dirs", ""));
-                addNonEmptyValues(EXCLUDED_EXTENSIONS, props.getProperty("excluded.extensions", ""));
-                addNonEmptyValues(EXCLUDED_FILES, props.getProperty("excluded.files", ""));
+                maxFileSize = Long.parseLong(props.getProperty("max.file.size", String.valueOf(maxFileSize)).trim());
+                addNonEmptyValues(excludedDirs, props.getProperty("excluded.dirs", ""));
+                addNonEmptyValues(excludedExtensions, props.getProperty("excluded.extensions", ""));
+                addNonEmptyValues(excludedFiles, props.getProperty("excluded.files", ""));
             }
         } else {
-            System.out.println("Properties file not found. Using default values.");
+            LOGGER.warning("Properties file not found. Using default values.");
         }
     }
 
@@ -95,12 +91,10 @@ public class DirectoryContents {
      * @param values A comma-separated string of values.
      */
     private static void addNonEmptyValues(Set<String> set, String values) {
-        for (String value : values.split(",")) {
-            String trimmed = value.trim();
-            if (!trimmed.isEmpty()) {
-                set.add(trimmed);
-            }
-        }
+        set.addAll(Arrays.stream(values.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet()));
     }
 
     /**
@@ -140,36 +134,35 @@ public class DirectoryContents {
      */
     private static String traverseDirectoryIteratively(Path directory) throws IOException {
         StringBuilder structure = new StringBuilder();
-        Deque<Pair<Path, Path>> dirsToVisit = new ArrayDeque<>();
-        dirsToVisit.push(new Pair<>(Paths.get(""), directory));
+        Deque<DirectoryEntry> dirsToVisit = new ArrayDeque<>();
+        dirsToVisit.push(new DirectoryEntry(Paths.get(""), directory));
 
         while (!dirsToVisit.isEmpty()) {
-            Pair<Path, Path> pair = dirsToVisit.pop();
-            Path path = pair.getFirst();
-            Path currentDir = pair.getSecond();
+            DirectoryEntry entry = dirsToVisit.pop();
+            Path relativePath = entry.getRelativePath();
+            Path currentDir = entry.getCurrentDir();
 
-            if (EXCLUDED_DIRS.contains(currentDir.getFileName().toString())) {
+            if (excludedDirs.contains(currentDir.getFileName().toString())) {
                 continue;
             }
 
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(currentDir)) {
                 List<Path> items = new ArrayList<>();
-                for (Path entry : stream) {
-                    items.add(entry);
-                }
+                stream.forEach(items::add);
                 items.sort(Comparator.comparing(Path::toString));
 
                 for (Path item : items) {
-                    Path relPath = path.resolve(item.getFileName());
+                    Path relPath = relativePath.resolve(item.getFileName());
                     if (Files.isDirectory(item)) {
                         structure.append(relPath).append("/\n");
-                        dirsToVisit.push(new Pair<>(relPath, item));
+                        dirsToVisit.push(new DirectoryEntry(relPath, item));
                     } else if (!shouldExcludeFile(item)) {
                         structure.append(relPath).append("\n");
                     }
                 }
             } catch (AccessDeniedException e) {
-                structure.append(path).append(": Permission denied\n");
+                structure.append(relativePath).append(": Permission denied\n");
+                LOGGER.log(Level.WARNING, "Access denied for directory: " + relativePath, e);
             }
         }
         return structure.toString();
@@ -183,15 +176,11 @@ public class DirectoryContents {
      */
     private static boolean shouldExcludeFile(Path file) {
         String fileName = file.getFileName().toString();
-        if (EXCLUDED_FILES.contains(fileName)) {
+        if (excludedFiles.contains(fileName)) {
             return true;
         }
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex != -1 && dotIndex < fileName.length() - 1) {
-            String extension = fileName.substring(dotIndex + 1);
-            return EXCLUDED_EXTENSIONS.contains(extension);
-        }
-        return false;
+        return fileName.lastIndexOf('.') != -1 && 
+               excludedExtensions.contains(fileName.substring(fileName.lastIndexOf('.') + 1));
     }
 
     /**
@@ -203,10 +192,15 @@ public class DirectoryContents {
      */
     private static boolean isBinaryFile(Path filePath) throws IOException {
         try (InputStream in = new BufferedInputStream(Files.newInputStream(filePath))) {
-            byte[] buff = new byte[64];
-            int bytesRead = in.read(buff);
+            byte[] buffer = new byte[64];
+            int bytesRead = in.read(buffer);
+            if (bytesRead == -1) {
+                return false;
+            }
             for (int i = 0; i < bytesRead; i++) {
-                if (buff[i] == 0) return true;
+                if (buffer[i] == 0) {
+                    return true;
+                }
             }
             return false;
         }
@@ -221,52 +215,64 @@ public class DirectoryContents {
      */
     private static String getFileContentsIteratively(Path directory) throws IOException {
         StringBuilder fileContents = new StringBuilder();
-        Deque<Pair<Path, Path>> dirsToVisit = new ArrayDeque<>();
-        dirsToVisit.push(new Pair<>(Paths.get(""), directory));
+        Deque<DirectoryEntry> dirsToVisit = new ArrayDeque<>();
+        dirsToVisit.push(new DirectoryEntry(Paths.get(""), directory));
 
         while (!dirsToVisit.isEmpty()) {
-            Pair<Path, Path> pair = dirsToVisit.pop();
-            Path path = pair.getFirst();
-            Path currentDir = pair.getSecond();
+            DirectoryEntry entry = dirsToVisit.pop();
+            Path relativePath = entry.getRelativePath();
+            Path currentDir = entry.getCurrentDir();
 
-            if (EXCLUDED_DIRS.contains(currentDir.getFileName().toString())) {
+            if (excludedDirs.contains(currentDir.getFileName().toString())) {
                 continue;
             }
 
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(currentDir)) {
                 List<Path> items = new ArrayList<>();
-                for (Path entry : stream) {
-                    items.add(entry);
-                }
+                stream.forEach(items::add);
                 items.sort(Comparator.comparing(Path::toString));
 
                 for (Path item : items) {
-                    Path relPath = path.resolve(item.getFileName());
+                    Path relPath = relativePath.resolve(item.getFileName());
                     if (Files.isDirectory(item)) {
-                        dirsToVisit.push(new Pair<>(relPath, item));
+                        dirsToVisit.push(new DirectoryEntry(relPath, item));
                     } else if (!shouldExcludeFile(item)) {
-                        fileContents.append("================\nFile: ").append(relPath).append("\n================\n");
-                        long fileSize = Files.size(item);
-                        if (fileSize > MAX_FILE_SIZE) {
-                            fileContents.append(String.format("Content: Skipped (file size: %.2f MB, max allowed: %.2f MB)\n\n", 
-                                                              fileSize / (1024.0 * 1024.0), MAX_FILE_SIZE / (1024.0 * 1024.0)));
-                        } else if (isBinaryFile(item)) {
-                            fileContents.append("Content: Skipped binary file\n\n");
-                        } else {
-                            try {
-                                String content = new String(Files.readAllBytes(item), StandardCharsets.UTF_8);
-                                fileContents.append("Content:\n").append(content).append("\n\n");
-                            } catch (IOException e) {
-                                fileContents.append("Content: Skipped due to error: ").append(e.getMessage()).append("\n\n");
-                            }
-                        }
+                        appendFileContent(fileContents, relPath, item);
                     }
                 }
             } catch (AccessDeniedException e) {
-                fileContents.append(path).append(": Permission denied\n\n");
+                fileContents.append(relativePath).append(": Permission denied\n\n");
+                LOGGER.log(Level.WARNING, "Access denied for directory: " + relativePath, e);
             }
         }
         return fileContents.toString();
+    }
+
+    /**
+     * Appends the content of a file to the given StringBuilder.
+     * 
+     * @param fileContents The StringBuilder to append the file content to.
+     * @param relPath The relative path of the file.
+     * @param item The Path object representing the file.
+     * @throws IOException If an error occurs while reading the file.
+     */
+    private static void appendFileContent(StringBuilder fileContents, Path relPath, Path item) throws IOException {
+        fileContents.append("================\nFile: ").append(relPath).append("\n================\n");
+        long fileSize = Files.size(item);
+        if (fileSize > maxFileSize) {
+            fileContents.append(String.format("Content: Skipped (file size: %.2f MB, max allowed: %.2f MB)\n\n", 
+                                              fileSize / (1024.0 * 1024.0), maxFileSize / (1024.0 * 1024.0)));
+        } else if (isBinaryFile(item)) {
+            fileContents.append("Content: Skipped binary file\n\n");
+        } else {
+            try {
+                String content = new String(Files.readAllBytes(item), StandardCharsets.UTF_8);
+                fileContents.append("Content:\n").append(content).append("\n\n");
+            } catch (IOException e) {
+                fileContents.append("Content: Skipped due to error: ").append(e.getMessage()).append("\n\n");
+                LOGGER.log(Level.WARNING, "Error reading file: " + relPath, e);
+            }
+        }
     }
 
     /**
@@ -334,38 +340,35 @@ public class DirectoryContents {
     }
 
     /**
-     * A simple pair class to hold two related objects.
-     * 
-     * @param <T> The type of the first object in the pair.
-     * @param <U> The type of the second object in the pair.
+     * A simple class to hold two related objects: a relative path and a current directory.
      */
-    private static class Pair<T, U> {
-        private final T first;
-        private final U second;
+    private static class DirectoryEntry {
+        private final Path relativePath;
+        private final Path currentDir;
 
         /**
-         * Constructs a new Pair with the given values.
+         * Constructs a new DirectoryEntry with the given values.
          * 
-         * @param first The first object in the pair.
-         * @param second The second object in the pair.
+         * @param relativePath The relative path.
+         * @param currentDir The current directory.
          */
-        public Pair(T first, U second) {
-            this.first = first;
-            this.second = second;
+        public DirectoryEntry(Path relativePath, Path currentDir) {
+            this.relativePath = relativePath;
+            this.currentDir = currentDir;
         }
 
         /**
-         * Gets the first object in the pair.
+         * Gets the relative path.
          * 
-         * @return The first object.
+         * @return The relative path.
          */
-        public T getFirst() { return first; }
+        public Path getRelativePath() { return relativePath; }
 
         /**
-         * Gets the second object in the pair.
+         * Gets the current directory.
          * 
-         * @return The second object.
+         * @return The current directory.
          */
-        public U getSecond() { return second; }
+        public Path getCurrentDir() { return currentDir; }
     }
 }
