@@ -141,7 +141,10 @@ public class DirectoryContents {
                     expectingDir = true;
                     break;
                 case "/output":
-                    expectingOutput = true;
+                    if (i == args.length - 1 || args[i + 1].startsWith("/")) {
+                        throw new IllegalArgumentException("Missing output directory path after /output");
+                    }
+                    outputDir = args[++i];
                     break;
                 default:
                     if (arg.startsWith("/")) {
