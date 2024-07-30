@@ -35,10 +35,12 @@ To quickly get started with DirectoryContents:
    ```
    java DirectoryContents /dir <input_directory1> [<input_directory2> ...] /output <output_directory>
 
-   Example:
-  java DirectoryContents /dir C:\Project1 C:\Project2 /output C:\Output
    ```
-
+   Example:
+   ```
+  java DirectoryContents /dir C:\Project1 C:\Project2 /output C:\Output
+ ```
+ 
 4. Check the output file `merged_contents.txt` in the specified output directory.
 
 ## Usage
