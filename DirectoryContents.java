@@ -111,50 +111,25 @@ public class DirectoryContents {
     
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
-            if (expectingDir) {
-                if (arg.startsWith("/")) {
-                    expectingDir = false;
-                    // Process the new switch
-                    if (arg.equalsIgnoreCase("/output")) {
+            if (arg.startsWith("/")) {
+                expectingDir = false;  // Reset expectingDir when a new switch is encountered
+                switch (arg.toLowerCase()) {
+                    case "/dir":
+                        expectingDir = true;
+                        break;
+                    case "/output":
                         expectingOutput = true;
-                    } else {
-                        throw new IllegalArgumentException("Unexpected switch while parsing directories: " + arg);
-                    }
-                } else {
-                    inputDirs.add(arg);
-                    continue;
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown switch: " + arg);
                 }
-            }
-            if (expectingOutput) {
-                if (i == args.length - 1) {
-                    throw new IllegalArgumentException("Missing output directory path after /output");
-                }
-                if (arg.startsWith("/")) {
-                    throw new IllegalArgumentException("Expected output directory path after /output, found: " + arg);
-                }
+            } else if (expectingDir) {
+                inputDirs.add(arg);
+            } else if (expectingOutput) {
                 outputDir = arg;
                 expectingOutput = false;
-                continue;
-            }
-            switch (arg.toLowerCase()) {
-                case "/dir":
-                    expectingDir = true;
-                    break;
-                case "/output":
-                    if (i == args.length - 1 || args[i + 1].startsWith("/")) {
-                        throw new IllegalArgumentException("Missing output directory path after /output");
-                    }
-                    if (i == args.length - 1 || args[i + 1].startsWith("/")) {
-                        throw new IllegalArgumentException("Missing output directory path after /output");
-                    }
-                    outputDir = args[++i];
-                    break;
-                default:
-                    if (arg.startsWith("/")) {
-                        throw new IllegalArgumentException("Unknown switch: " + arg);
-                    } else {
-                        throw new IllegalArgumentException("Unexpected argument: " + arg);
-                    }
+            } else {
+                throw new IllegalArgumentException("Unexpected argument: " + arg);
             }
         }
     
@@ -163,6 +138,12 @@ public class DirectoryContents {
         }
         if (expectingOutput) {
             throw new IllegalArgumentException("Missing output directory path after /output");
+        }
+        if (inputDirs.isEmpty()) {
+            throw new IllegalArgumentException("No input directories specified");
+        }
+        if (outputDir == null) {
+            throw new IllegalArgumentException("No output directory specified");
         }
     
         return outputDir;
