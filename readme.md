@@ -1,15 +1,20 @@
 # DirectoryContents
 
-DirectoryContents is a Java application that generates a comprehensive text representation of a directory's structure and file contents. It's designed to create an easily analyzable output for AI systems, code reviews, or other automated processes.
+DirectoryContents is a Java application that generates a comprehensive text representation of multiple directory structures and file contents. It's designed to create an easily analyzable output for AI systems, code reviews, or other automated processes.
 
 ## Features
 
-- Traverses directory structures recursively
+- Traverses multiple directory structures recursively
 - Captures file contents (with configurable size limits)
 - Excludes specified directories, file extensions, and files
-- Generates a formatted output file with directory structure and file contents
-- Configurable via properties file or command-line arguments
+- Generates a formatted output file with directory structures and file contents
+- Configurable via properties file
+- Command-line interface for specifying input and output directories
 
+## Requirements
+
+- Java 11 or higher
+- Access to file system for reading directory contents
 
 ## Quickstart
 
@@ -26,39 +31,32 @@ To quickly get started with DirectoryContents:
    javac *.java
    ```
 
-3. Run the application with default settings:
+3. Run the application:
    ```
-   java DirectoryContents /path/to/your/directory
+   java DirectoryContents /dir <input_directory1> [<input_directory2> ...] /output <output_directory>
+
+   Example:
+  java DirectoryContents /dir C:\Project1 C:\Project2 /output C:\Output
    ```
 
-4. Check the output file `directory_contents.txt` in the current directory.
-
-For more advanced usage and configuration options, see the [Usage](#usage) and [Configuration](#configuration) sections below.
-
-## Requirements
-
-- Java 11 or higher
-- Access to file system for reading directory contents
+4. Check the output file `merged_contents.txt` in the specified output directory.
 
 ## Usage
 
-1. Compile the Java files:
-   ```
-   javac *.java
-   ```
+The application uses command-line arguments to specify input and output directories:
 
-2. Run the application:
-   ```
-   java DirectoryContents <directory_path> [config_file]
-   ```
+```
+java DirectoryContents /dir <input_directory1> [<input_directory2> ...] /output <output_directory>
+```
 
-   If no config file is specified, it will look for `config.properties` in the current directory.
-
-3. The application will generate an output file named `<directory_name>_contents.txt` in the target directory.
+- `/dir` specifies the input directories to process
+- `<input_directory1> [<input_directory2> ...]` are the paths to the input directories
+- `/output` specifies the output directory for the generated file
+- `<output_directory>` is the path to the output directory
 
 ## Configuration
 
-Create a `config.properties` file: 
+Create a `config.properties` file:
 
 ```properties
 # Maximum file size in bytes
@@ -73,9 +71,6 @@ excluded.extensions=class,jar,war
 # Specific files to exclude
 excluded.files=config.properties,secrets.txt
 
-# Output format (text)
-output.format=text
-
 ```
 
 ## Output Format
@@ -88,8 +83,6 @@ The generated output file includes:
 
 ## Limitations
 
-- Binary files are not included in the output
-- Files larger than the specified maximum size are skipped
 - Access to some directories or files may be restricted due to permissions
 
 ## Contributing
@@ -106,4 +99,4 @@ This tool may capture sensitive information from your directory. Please review t
 
 ## Credits
 
-This project was inspired by and adapted from [RepoToTextForLLMs](https://github.com/Doriandarko/RepoToTextForLLMs) by Doriandarko. 
+This project was inspired by and adapted from [RepoToTextForLLMs](https://github.com/Doriandarko/RepoToTextForLLMs) by Doriandarko.
