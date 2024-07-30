@@ -59,7 +59,7 @@ java DirectoryContents /dir <input_directory1> [<input_directory2> ...] /output 
 Create a `config.properties` file:
 
 ```properties
-# Maximum file size in bytes
+# Maximum file size in bytes; 
 max.file.size=1048576
 
 # Directories to exclude from processing

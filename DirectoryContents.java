@@ -299,7 +299,7 @@ public class DirectoryContents {
         }
     }
 
-    /**
+    /***
      * Iteratively reads the contents of all files in the given directory and its subdirectories.
      * 
      * @param directory The root directory to process.
