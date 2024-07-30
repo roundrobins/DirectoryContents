@@ -144,6 +144,9 @@ public class DirectoryContents {
                     if (i == args.length - 1 || args[i + 1].startsWith("/")) {
                         throw new IllegalArgumentException("Missing output directory path after /output");
                     }
+                    if (i == args.length - 1 || args[i + 1].startsWith("/")) {
+                        throw new IllegalArgumentException("Missing output directory path after /output");
+                    }
                     outputDir = args[++i];
                     break;
                 default:
