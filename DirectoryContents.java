@@ -23,45 +23,144 @@ public class DirectoryContents {
     /**
      * The main entry point of the program.
      * 
-     * @param args Command line arguments. If provided, the first argument is used as the target directory,
-     *             and the second argument (if present) is used as the properties file name.
+     * @param args Command line arguments. Each argument is treated as a target directory.
      */
     public static void main(String[] args) {
-        String targetDirectory = System.getProperty("user.dir");
-        String propertiesFile = DEFAULT_PROPERTIES_FILE;
-
-        // Parse command-line arguments
-        if (args.length > 0) {
-            targetDirectory = args[0];
-            if (args.length > 1) {
-                propertiesFile = args[1];
-            }
-        }
-
-        
-        // Check if the target directory exists and is a directory
-        Path targetPath = Paths.get(targetDirectory);
-        if (!Files.exists(targetPath) || !Files.isDirectory(targetPath)) {
-            System.out.println("Error: The specified target directory does not exist or is not a directory.");
-            System.exit(1);
-        }
+        List<String> inputDirs = new ArrayList<>();
+        String outputDir;
 
         try {
-            loadProperties(propertiesFile);
-            String contents = getDirectoryContents(targetDirectory);
-            String outputFilename = targetPath.getFileName() + "_contents.txt";
-            Path outputPath = targetPath.resolve(outputFilename);
-            Files.write(outputPath, contents.getBytes(StandardCharsets.UTF_8));
-            System.out.println("Directory contents saved to '" + outputPath + "'.");
+            if (args.length == 0 || "/help".equalsIgnoreCase(args[0])) {
+                displayUsageInstructions();
+                System.exit(0);
+            }
+
+            outputDir = parseArguments(args, inputDirs);
+            
+            if (inputDirs.isEmpty()) {
+                System.out.println("Error: Please provide at least one input directory using the /dir switch.");
+                displayUsageInstructions();
+                System.exit(1);
+            }
+
+            if (outputDir == null) {
+                System.out.println("Error: Please specify an output directory using the /output switch.");
+                displayUsageInstructions();
+                System.exit(1);
+            }
+
+            Path outputPath = Paths.get(outputDir);
+            if (!Files.exists(outputPath)) {
+                Files.createDirectories(outputPath);
+            } else if (!Files.isDirectory(outputPath) || !Files.isWritable(outputPath)) {
+                System.out.println("Error: The specified output path is not a writable directory: " + outputDir);
+                System.exit(1);
+            }
+
+            loadProperties(DEFAULT_PROPERTIES_FILE);
+            
+            StringBuilder mergedContents = new StringBuilder();
+            
+            for (String targetDirectory : inputDirs) {
+                Path targetPath = Paths.get(targetDirectory).toAbsolutePath();
+                if (!Files.exists(targetPath) || !Files.isDirectory(targetPath)) {
+                    System.out.println("Error: The specified target directory does not exist or is not a directory: " + targetDirectory);
+                    continue;
+                }
+
+                try {
+                    String contents = getDirectoryContents(targetDirectory);
+                    mergedContents.append(contents).append("\n\n");
+                    System.out.println("Processed directory: " + targetDirectory);
+                } catch (IOException e) {
+                    System.out.println("Error processing directory '" + targetDirectory + "': " + e.getMessage());
+                }
+            }
+
+            Path outputFilePath = outputPath.resolve("merged_contents.txt");
+            Files.write(outputFilePath, mergedContents.toString().getBytes(StandardCharsets.UTF_8));
+            System.out.println("Merged directory contents saved to '" + outputFilePath + "'.");
+
         } catch (IOException e) {
-            System.out.println("An IO error occurred: " + e.getMessage());
-        } catch (SecurityException e) {
-            System.out.println("A security error occurred: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("Error in command-line arguments: " + e.getMessage());
+            displayUsageInstructions();
+            System.exit(1);
         } catch (Exception e) {
             System.out.println("An unexpected error occurred: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
         }
     }
 
+    private static void displayUsageInstructions() {
+        System.out.println("Usage: java DirectoryContents [/help] /dir <directory1> [<directory2> ...] /output <output_directory>");
+        System.out.println("Options:");
+        System.out.println("  /help              Display this help message");
+        System.out.println("  /dir <directory>   Specify one or more input directories to process");
+        System.out.println("  /output <directory> Specify the output directory for the merged contents file");
+        System.out.println("\nExample:");
+        System.out.println("  java DirectoryContents /dir C:\\Project1 C:\\Project2 /output C:\\Output");
+    }
+
+    private static String parseArguments(String[] args, List<String> inputDirs) {
+        String outputDir = null;
+        boolean expectingDir = false;
+        boolean expectingOutput = false;
+    
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if (expectingDir) {
+                if (arg.startsWith("/")) {
+                    expectingDir = false;
+                    // Process the new switch
+                    if (arg.equalsIgnoreCase("/output")) {
+                        expectingOutput = true;
+                    } else {
+                        throw new IllegalArgumentException("Unexpected switch while parsing directories: " + arg);
+                    }
+                } else {
+                    inputDirs.add(arg);
+                    continue;
+                }
+            }
+            if (expectingOutput) {
+                if (i == args.length - 1) {
+                    throw new IllegalArgumentException("Missing output directory path after /output");
+                }
+                if (arg.startsWith("/")) {
+                    throw new IllegalArgumentException("Expected output directory path after /output, found: " + arg);
+                }
+                outputDir = arg;
+                expectingOutput = false;
+                continue;
+            }
+            switch (arg.toLowerCase()) {
+                case "/dir":
+                    expectingDir = true;
+                    break;
+                case "/output":
+                    expectingOutput = true;
+                    break;
+                default:
+                    if (arg.startsWith("/")) {
+                        throw new IllegalArgumentException("Unknown switch: " + arg);
+                    } else {
+                        throw new IllegalArgumentException("Unexpected argument: " + arg);
+                    }
+            }
+        }
+    
+        if (expectingDir) {
+            throw new IllegalArgumentException("Missing directory path after /dir");
+        }
+        if (expectingOutput) {
+            throw new IllegalArgumentException("Missing output directory path after /output");
+        }
+    
+        return outputDir;
+    }
     /**
      * Loads configuration properties from the specified file.
      * 
